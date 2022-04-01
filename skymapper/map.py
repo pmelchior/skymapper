@@ -976,6 +976,11 @@ class Map():
         x, y = self.proj.transform(lon, lat)
         return self.ax.scatter(x, y, **kwargs)
 
+    def fill(self, lon, lat, **kwargs):
+        """Matplotlib `fill` with `lon/lat` points transformed according to map projection"""
+        x, y = self.proj.transform(lon, lat)
+        return self.ax.fill(x, y, **kwargs)
+    
     def hexbin(self, lon, lat, C=None, **kwargs):
         """Matplotlib `hexbin` with `lon/lat` points transformed according to map projection"""
         x, y = self.proj.transform(lon, lat)
