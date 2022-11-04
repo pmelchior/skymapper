@@ -377,13 +377,11 @@ class Map():
             self.ax.set_ylim(bottom=bottom, top=top, **kw)
             self._resetFrame()
 
-    def grid(self, sep=30, sep_lat=None, sep_lon=None, parallel_fmt=None, meridian_fmt=None, lat_min=-90, lat_max=90, lon_min=-180, lon_max=180, **kwargs):
+    def grid(self, sep=30, parallel_fmt=None, meridian_fmt=None, lat_min=-90, lat_max=90, lon_min=-180, lon_max=180, **kwargs):
         """Set map grid / graticules
 
         Args:
-            sep: distance between graticules in deg
-            sep_lat: (optional) sep value to use for the latitudes
-            sep_lon: (optional) sep value to use for the longitudes
+            sep: distance between graticules in deg. if two-element list, distance in lat and long, resp.
             parallel_fmt: formatter for parallel labels
             meridian_fmt: formatter for meridian labels
             lat_min: minimum latitude for graticules
@@ -392,7 +390,10 @@ class Map():
             lon_max: maximum longitude for graticules
             **kwargs: styling of `matplotlib.lines.Line2D` for the graticules
         """
-        if sep_lat is None or sep_lon is None:
+        try:
+            if len(sep)==2:
+                sep_lat, sep_lon = sep
+        except TypeError:
             sep_lat = sep_lon = sep
         if parallel_fmt is None:
             parallel_fmt = degPMFormatter
