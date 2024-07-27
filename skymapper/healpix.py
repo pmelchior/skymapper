@@ -31,21 +31,20 @@ def getHealpixVertices(pixels, nside, nest=False):
 
 def getGrid(nside, nest=False, return_vertices=False):
     pixels = np.arange(hp.nside2npix(nside))
-    theta, phi = hp.pix2ang(nside, pixels, nest=nest)
-    ra = phi*180/np.pi
-    dec = 90 - theta*180/np.pi
+    lon, lat = hp.pix2ang(nside, pixels, nest=nest, lonlat=True)
     if return_vertices:
         vertices = getHealpixVertices(pixels, nside, nest=nest)
-        return pixels, ra, dec, vertices
-    return pixels, ra, dec
+        return pixels, lon, lat, vertices
+    return pixels, lon, lat
 
-def getCountAtLocations(ra, dec, nside=512, per_area=True, return_vertices=False):
-    """Get number density of objects from RA/Dec in HealPix cells.
+def getCountAtLocations(lon, lat, nside=512, nest=False, per_area=True, return_vertices=False):
+    """Get number density of objects from lon, lat in HealPix cells.
 
     Args:
-        ra: list of rectascensions
-        dec: list of declinations
+        lon: list of longitudes in degrees
+        lat: list of latutude in degrees
         nside: HealPix nside
+        nest: Healpix NEST scheme
         per_area: return counts in units of 1/arcmin^2
         return_vertices: whether to also return the boundaries of HealPix cells
 
@@ -55,7 +54,7 @@ def getCountAtLocations(ra, dec, nside=512, per_area=True, return_vertices=False
         vertices: (N,4,2), RA/Dec coordinates of 4 boundary points of cell
     """
     # get healpix pixels
-    ipix = hp.ang2pix(nside, (90-dec)/180*np.pi, ra/180*np.pi, nest=False)
+    ipix = hp.ang2pix(nside, lon, lat, lonlat=True, nest=nest)
     # count how often each pixel is hit
     bc = np.bincount(ipix, minlength=hp.nside2npix(nside))
     if per_area:
@@ -69,16 +68,16 @@ def getCountAtLocations(ra, dec, nside=512, per_area=True, return_vertices=False
         return bc, vertices
     return bc
 
-def reduceAtLocations(ra, dec, value, reduce_fct=np.mean, nside=512, return_vertices=False):
-    """Reduce values at given RA/Dec in HealPix cells to a scalar.
+def reduceAtLocations(lon, lat, value, reduce_fct=np.mean, nside=512, nest=False, return_vertices=False):
+    """Reduce values at given lon, lat in HealPix cells to a scalar.
 
     Args:
-        ra: list of rectascensions
-        dec: list of declinations
+        lon: list of longitudes in degrees
+        lat: list of latutude in degrees
         value: list of values to be reduced
         reduce_fct: function to operate on values in each cell
         nside: HealPix nside
-        per_area: return counts in units of 1/arcmin^2
+        nest: Healpix NEST scheme
         return_vertices: whether to also return the boundaries of HealPix cells
 
     Returns:
@@ -87,7 +86,7 @@ def reduceAtLocations(ra, dec, value, reduce_fct=np.mean, nside=512, return_vert
         vertices: (N,4,2), RA/Dec coordinates of 4 boundary points of cell
     """
     # get healpix pixels
-    ipix = hp.ang2pix(nside, (90-dec)/180*np.pi, ra/180*np.pi, nest=False)
+    ipix = hp.ang2pix(nside, lon, lat, lonlat=lonlat, nest=nest)
     # count how often each pixel is hit, only use non-empty pixels
     bc = np.bincount(ipix, minlength=hp.nside2npix(nside))
     pixels = np.nonzero(bc)[0]
@@ -98,7 +97,7 @@ def reduceAtLocations(ra, dec, value, reduce_fct=np.mean, nside=512, return_vert
         v.data[pixel] = reduce_fct(value[sel])
 
     # get the vertices that confine each pixel
-    # convert to RA/Dec (thanks to Eric Huff)
+    # convert to lon, lat (thanks to Eric Huff)
     if return_vertices:
         vertices = getHealpixVertices(pixels, nside)
         return v, vertices

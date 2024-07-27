@@ -395,6 +395,13 @@ class Map():
                 sep_lat, sep_lon = sep
         except TypeError:
             sep_lat = sep_lon = sep
+
+        # clone() sets sep_lat, sep_lon, need to get them from kwargs
+        # also need to avoid sep being stored in config
+        del sep
+        sep_lat = kwargs.pop("sep_lat", sep_lat)
+        sep_lon = kwargs.pop("sep_lon", sep_lon)
+
         if parallel_fmt is None:
             parallel_fmt = degPMFormatter
         if meridian_fmt is None:
@@ -1185,8 +1192,9 @@ class Map():
 
         Args:
             m: Healpix map array
-            nest: HealPix nest
+            nest: HealPix NEST scheme
             color_percentiles: lower and higher cutoff percentile for map coloring
+            **kwargs: matplotlib.imshow keywords
         """
         # determine ra, dec for all pixels in map
         clip_path = kwargs.pop('clip_path', self._edge)
@@ -1201,15 +1209,16 @@ class Map():
         x_pixel_max, y_pixel_max = self.ax.transData.transform((xlim[1], ylim[1]))
         width, height = int(math.ceil(x_pixel_max - x_pixel_min)), int(math.ceil(y_pixel_max - y_pixel_min))
 
-        # make a line in xy coordinates with the determined number of pixels
-        xline = np.linspace(xlim[0], xlim[1], width)        
-        yline = np.linspace(ylim[0], ylim[1], height)        
+        # make a grid in xy coordinates with the determined number of pixels
+        xline = np.linspace(xlim[0], xlim[1], width)
+        yline = np.linspace(ylim[0], ylim[1], height)
         xp, yp = np.meshgrid(xline, yline)
-        # compute coordinate for this pixels that are inside map
+
+        # compute coordinate for the pixels that are inside map
         inside = self.contains(xp, yp)
         lonp, latp = self.proj.inv(xp[inside], yp[inside])
         nside = healpix.hp.npix2nside(m.size)
-        ipix = healpix.hp.ang2pix(nside, lonp, latp, nest=nest, lonlat=True)
+        ipix = healpix.hp.ang2pix(nside, lonp, latp, lonlat=True, nest=nest) # make sure to use lonlat=True!
 
         # copy values from m into vp
         # but check if m is a masked array to avoid plotting masked values
