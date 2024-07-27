@@ -80,11 +80,7 @@ The styling of graticules can be changed by calling `map.grid()` with different 
 
 ## Installation and Prerequisites
 
-You can either clone the repo and install by `python setup.py install` or get the latest release with
-
-```
-pip install skymapper
-```
+You can either clone the repo and install with `pip install .` or get the latest release with `pip install skymapper`.
 
 Dependencies:
 

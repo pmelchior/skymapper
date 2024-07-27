@@ -1,7 +1,7 @@
 import matplotlib
 import matplotlib.pyplot
 import numpy as np
-import re, pickle
+import math, re, pickle
 import scipy.interpolate
 from . import healpix
 from . import survey_register
@@ -1188,25 +1188,62 @@ class Map():
             nest: HealPix nest
             color_percentiles: lower and higher cutoff percentile for map coloring
         """
-        # determine ra, dec of map; restrict to non-empty cells
-        pixels = np.flatnonzero(m)
+        # determine ra, dec for all pixels in map
+        clip_path = kwargs.pop('clip_path', self._edge)
+        if clip_path is None:
+            xlim, ylim = self.xlim(), self.ylim()
+        else:
+            xlim = clip_path.xy[:, 0].min(), clip_path.xy[:, 0].max()
+            ylim = clip_path.xy[:, 1].min(), clip_path.xy[:, 1].max()
+
+        # determine number of pixel in xy limits
+        x_pixel_min, y_pixel_min = self.ax.transData.transform((xlim[0], ylim[0]))
+        x_pixel_max, y_pixel_max = self.ax.transData.transform((xlim[1], ylim[1]))
+        width, height = int(math.ceil(x_pixel_max - x_pixel_min)), int(math.ceil(y_pixel_max - y_pixel_min))
+
+        # make a line in xy coordinates with the determined number of pixels
+        xline = np.linspace(xlim[0], xlim[1], width)        
+        yline = np.linspace(ylim[0], ylim[1], height)        
+        xp, yp = np.meshgrid(xline, yline)
+        # compute coordinate for this pixels that are inside map
+        inside = self.contains(xp, yp)
+        lonp, latp = self.proj.inv(xp[inside], yp[inside])
         nside = healpix.hp.npix2nside(m.size)
-        vertices = healpix.getHealpixVertices(pixels, nside, nest=nest)
-        color = m[pixels]
+        ipix = healpix.hp.ang2pix(nside, lonp, latp, nest=nest, lonlat=True)
+
+        # copy values from m into vp
+        # but check if m is a masked array to avoid plotting masked values
+        vp = np.ma.array(np.empty(xp.shape), mask=~inside)
+        if np.__version__ >= "1.1":
+            matype = np.ma.core.MaskedArray
+        else:
+            matype = np.ma.array
+        if not isinstance(m, matype):
+            vp.data[inside] = m[ipix]
+        else:
+            vp.data[inside] = m.data[ipix]
+            vp.mask[inside] |= m.mask[ipix]
 
         # color range
         vmin = kwargs.pop("vmin", None)
         vmax = kwargs.pop("vmax", None)
         if vmin is None or vmax is None:
-            vlim = np.percentile(color, color_percentiles)
+            vlim = np.percentile(vp.data[inside], color_percentiles)
             if vmin is None:
                 vmin = vlim[0]
             if vmax is None:
                 vmax = vlim[1]
 
-        # make a map of the vertices
+        # show the vp image
         cmap = kwargs.pop("cmap", "YlOrRd")
-        return self.vertex(vertices, color=color, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+        zorder = kwargs.pop("zorder", 0) # same as for imshow: underneath everything
+        xlim_, ylim_ = self.ax.get_xlim(), self.ax.get_ylim()
+        artist = self.ax.imshow(vp, extent=(xlim[0], xlim[1], ylim[0], ylim[1]), vmin=vmin, vmax=vmax, cmap=cmap, zorder=zorder, **kwargs)
+        artist.set_clip_path(clip_path)
+        # ... because imshow focusses on extent
+        self.ax.set_xlim(xlim_)
+        self.ax.set_ylim(ylim_)
+        return artist
 
     def footprint(self, survey, nside, **kwargs):
         """Plot survey footprint onto map
@@ -1223,34 +1260,24 @@ class Map():
         inside = survey.contains(rap, decp)
         return self.vertex(vertices[inside], **kwargs)
 
-    def density(self, lon, lat, nside=1024, color_percentiles=[10,90], **kwargs):
+    def density(self, lon, lat, nside=1024, **kwargs):
         """Plot sample density using healpix binning
 
         Args:
             lon: list of longitudes
             lat: list of latitudes
             nside: HealPix nside
-            color_percentiles: lower and higher cutoff percentile for map coloring
+            **kwargs: additional arguments for healpix()
         """
         # get count in healpix cells, restrict to non-empty cells
-        bc, lonp, latp, vertices = healpix.getCountAtLocations(lon, lat, nside=nside, return_vertices=True)
-        color = bc
-
-        # color range
-        vmin = kwargs.pop("vmin", None)
-        vmax = kwargs.pop("vmax", None)
-        if vmin is None or vmax is None:
-            vlim = np.percentile(color, color_percentiles)
-            if vmin is None:
-                vmin = vlim[0]
-            if vmax is None:
-                vmax = vlim[1]
+        bc = healpix.getCountAtLocations(lon, lat, nside=nside)
+        bc = np.ma.array(bc, mask=(bc==0))
 
         # styling
         cmap = kwargs.pop("cmap", "YlOrRd")
 
         # make map
-        return self.vertex(vertices, color=color, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+        return self.healpix(bc, cmap=cmap, **kwargs)
 
     def extrapolate(self, lon, lat, value, resolution=100, **kwargs):
         """Extrapolate lon,lat,value samples on the entire sphere

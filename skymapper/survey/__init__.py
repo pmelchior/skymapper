@@ -45,4 +45,4 @@ try:
             MangleSurvey.__init__(self, os.path.join(this_dir, "boss_survey.ply"))
 
 except ImportError:
-    print("Warning: surveys missing because pymangle is not installed")
+    print("skymapper: survey definitions missing because pymangle is not installed")

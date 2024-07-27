@@ -50,33 +50,24 @@ def getCountAtLocations(ra, dec, nside=512, per_area=True, return_vertices=False
         return_vertices: whether to also return the boundaries of HealPix cells
 
     Returns:
-        bc, ra_, dec_, [vertices]
+        bc, [vertices]
         bc: count of objects in a HealPix cell if count > 0
-        ra_: rectascension of the cell center (same format as ra/dec)
-        dec_: declinations of the cell center (same format as ra/dec)
         vertices: (N,4,2), RA/Dec coordinates of 4 boundary points of cell
     """
-    import healpy as hp
     # get healpix pixels
     ipix = hp.ang2pix(nside, (90-dec)/180*np.pi, ra/180*np.pi, nest=False)
     # count how often each pixel is hit
-    bc = np.bincount(ipix)
-    pixels = np.nonzero(bc)[0]
-    bc = bc[bc>0]
+    bc = np.bincount(ipix, minlength=hp.nside2npix(nside))
     if per_area:
         bc = bc.astype('f8')
         bc /= hp.nside2resol(nside, arcmin=True)**2 # in arcmin^-2
-    # get position of each pixel in RA/Dec
-    theta, phi = hp.pix2ang(nside, pixels, nest=False)
-    ra_ = phi*180/np.pi
-    dec_ = 90 - theta*180/np.pi
 
-    # get the vertices that confine each pixel
-    # convert to RA/Dec (thanks to Eric Huff)
+    # for every non-empty pixel: get the vertices that confine it
     if return_vertices:
+        pixels = np.nonzero(bc)[0]
         vertices = getHealpixVertices(pixels, nside)
-        return bc, ra_, dec_, vertices
-    return bc, ra_, dec_
+        return bc, vertices
+    return bc
 
 def reduceAtLocations(ra, dec, value, reduce_fct=np.mean, nside=512, return_vertices=False):
     """Reduce values at given RA/Dec in HealPix cells to a scalar.
@@ -91,31 +82,24 @@ def reduceAtLocations(ra, dec, value, reduce_fct=np.mean, nside=512, return_vert
         return_vertices: whether to also return the boundaries of HealPix cells
 
     Returns:
-        v, ra_, dec_, [vertices]
-        v: reduction of values in a HealPix cell if count > 0
-        ra_: rectascension of the cell center (same format as ra/dec)
-        dec_: declinations of the cell center (same format as ra/dec)
+        v, [vertices]
+        v: reduction of values in a HealPix cell if count > 0, otherwise masked
         vertices: (N,4,2), RA/Dec coordinates of 4 boundary points of cell
     """
-    import healpy as hp
     # get healpix pixels
     ipix = hp.ang2pix(nside, (90-dec)/180*np.pi, ra/180*np.pi, nest=False)
     # count how often each pixel is hit, only use non-empty pixels
-    pixels = np.nonzero(np.bincount(ipix))[0]
+    bc = np.bincount(ipix, minlength=hp.nside2npix(nside))
+    pixels = np.nonzero(bc)[0]
 
-    v = np.empty(pixels.size)
-    for i in xrange(pixels.size):
-        sel = (ipix == pixels[i])
-        v[i] = reduce_fct(value[sel])
-
-    # get position of each pixel in RA/Dec
-    theta, phi = hp.pix2ang(nside, pixels, nest=False)
-    ra_ = phi*180/np.pi
-    dec_ = 90 - theta*180/np.pi
+    v = np.ma.empty(bc.size, mask=(bc==0))
+    for pixel in pixels:
+        sel = (ipix == pixels)
+        v.data[pixel] = reduce_fct(value[sel])
 
     # get the vertices that confine each pixel
     # convert to RA/Dec (thanks to Eric Huff)
     if return_vertices:
         vertices = getHealpixVertices(pixels, nside)
-        return v, ra_, dec_, vertices
-    return v, ra_, dec_
+        return v, vertices
+    return v
