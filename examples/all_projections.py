@@ -1,4 +1,5 @@
 import skymapper as skm
+import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     # cycle through all defined projections and show the full sky
@@ -24,4 +25,5 @@ if __name__ == "__main__":
             map = skm.Map(proj, interactive=False)
             map.grid()
             map.title(name)
-            map.show()
+
+        plt.show()

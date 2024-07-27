@@ -4,26 +4,18 @@ import numpy as np
 import math, re, pickle
 import scipy.interpolate
 from . import healpix
-from . import survey_register
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
-from matplotlib.path import Path
+
 
 DEG2RAD = np.pi/180
 
-def skyDistance(radec, radec_ref):
+def angularDistance(radec1, radec2):
     """Compute distance on the curved sky"""
-    ra, dec = radec
-    ra_ref, dec_ref = radec_ref
-    ra_diff = np.abs(ra - ra_ref)
-    mask = ra_diff > 180
-    if not np.isscalar(ra):
-        ra_diff[mask] = 360 - ra_diff[mask]
-    elif mask:
-        ra_diff = 360 - ra_diff
-    ra_diff *= np.cos(dec_ref*DEG2RAD)
-    dec_diff = dec - dec_ref
-    return np.sqrt(ra_diff**2 + dec_diff**2)
+    ra1, dec1 = radec1 * DEG2RAD
+    ra2, dec2 = radec2 * DEG2RAD
+    return np.arccos(np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra1-ra2))
+
 
 # extrapolation function from
 # http://stackoverflow.com/questions/2745329/how-to-make-scipy-interpolate-give-an-extrapolated-result-beyond-the-input-range
@@ -1091,7 +1083,7 @@ class Map():
         return cb
 
     def title(self, label, **kwargs):
-        return self.fig.suptitle(label, **kwargs)
+        return self.ax.set_title(label, **kwargs)
 
     def focus(self, lon, lat, pad=0.025):
         """Focus onto region of map covered by `lon/lat`
@@ -1196,29 +1188,33 @@ class Map():
             color_percentiles: lower and higher cutoff percentile for map coloring
             **kwargs: matplotlib.imshow keywords
         """
-        # determine ra, dec for all pixels in map
+
+        # determine lon, lat for all pixels visible in the map
         clip_path = kwargs.pop('clip_path', self._edge)
         if clip_path is None:
             xlim, ylim = self.xlim(), self.ylim()
         else:
             xlim = clip_path.xy[:, 0].min(), clip_path.xy[:, 0].max()
             ylim = clip_path.xy[:, 1].min(), clip_path.xy[:, 1].max()
-
         # determine number of pixel in xy limits
         x_pixel_min, y_pixel_min = self.ax.transData.transform((xlim[0], ylim[0]))
         x_pixel_max, y_pixel_max = self.ax.transData.transform((xlim[1], ylim[1]))
         width, height = int(math.ceil(x_pixel_max - x_pixel_min)), int(math.ceil(y_pixel_max - y_pixel_min))
-
         # make a grid in xy coordinates with the determined number of pixels
         xline = np.linspace(xlim[0], xlim[1], width)
         yline = np.linspace(ylim[0], ylim[1], height)
         xp, yp = np.meshgrid(xline, yline)
-
         # compute coordinate for the pixels that are inside map
         inside = self.contains(xp, yp)
-        lonp, latp = self.proj.inv(xp[inside], yp[inside])
+        xp = np.ma.array(xp, mask=~inside)
+        yp = np.ma.array(yp, mask=~inside)
+        lonp, latp = self.proj.inv(xp, yp)
+
+        # determine healpix ipix for all visible and valid map pixels
+        valid = np.isfinite(lonp.data) & np.isfinite(latp.data)
+        inside &= valid
         nside = healpix.hp.npix2nside(m.size)
-        ipix = healpix.hp.ang2pix(nside, lonp, latp, lonlat=True, nest=nest) # make sure to use lonlat=True!
+        ipix = healpix.hp.ang2pix(nside, lonp[inside], latp[inside], lonlat=True, nest=nest) # use lonlat=True!
 
         # copy values from m into vp
         # but check if m is a masked array to avoid plotting masked values
@@ -1301,7 +1297,9 @@ class Map():
             **kwargs: arguments for matplotlib.imshow
         """
         # interpolate samples in lon/lat
-        rbfi = scipy.interpolate.Rbf(lon, lat, value, norm=skyDistance)
+        # this should be evaluated with angular distances, but that's very slow and has unstable extrapolation
+        # we use Euclidean norm instead
+        rbfi = scipy.interpolate.Rbf(lon, lat, value) # , norm=angularDistance)
 
         # make grid in x/y over the limits of the map or the clip_path
         clip_path = kwargs.pop('clip_path', self._edge)
@@ -1319,10 +1317,15 @@ class Map():
         yline = np.arange(ylim[0], ylim[1], dx)
         xp, yp = np.meshgrid(xline, yline) + dx/2 # evaluate center pixel
         inside = self.contains(xp,yp)
-        vp = np.ma.array(np.empty(xp.shape), mask=~inside)
+        xp = np.ma.array(xp, mask=~inside)
+        yp = np.ma.array(yp, mask=~inside)
+        lonp, latp = self.proj.inv(xp, yp)
 
-        lonp, latp = self.proj.inv(xp[inside], yp[inside])
-        vp[inside] = rbfi(lonp, latp)
+        # evaluate RBF for all visible and valid map pixels
+        valid = np.isfinite(lonp.data) & np.isfinite(latp.data)
+        inside &= valid
+        vp = np.ma.array(np.empty(xp.shape), mask=~inside)
+        vp[inside] = rbfi(lonp[inside], latp[inside])
 
         # xp,yp whose centers aren't in the map have no values:
         # edges of map are not clean

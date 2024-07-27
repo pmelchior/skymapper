@@ -86,7 +86,7 @@ def reduceAtLocations(lon, lat, value, reduce_fct=np.mean, nside=512, nest=False
         vertices: (N,4,2), RA/Dec coordinates of 4 boundary points of cell
     """
     # get healpix pixels
-    ipix = hp.ang2pix(nside, lon, lat, lonlat=lonlat, nest=nest)
+    ipix = hp.ang2pix(nside, lon, lat, lonlat=True, nest=nest)
     # count how often each pixel is hit, only use non-empty pixels
     bc = np.bincount(ipix, minlength=hp.nside2npix(nside))
     pixels = np.nonzero(bc)[0]
