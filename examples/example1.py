@@ -107,7 +107,7 @@ if __name__ == "__main__":
     map4.grid(sep=sep)
 
     # alter number of labels at the south pole
-    map4.labelMeridiansAtParallel(-90, size=8)#, meridians=np.arange(0,360,90))
+    map4.labelMeridiansAtParallel(-90, size=8)
     map4.labelMeridiansAtParallel(0, color='w')
 
     # as example: extrapolate declination over sky

@@ -1163,7 +1163,7 @@ class Map():
         vertices_ = vertices_[sel]
 
         from matplotlib.collections import PolyCollection
-        zorder = kwargs.pop("zorder", 0) # same as for imshow: underneath everything
+        zorder = kwargs.pop("zorder", 0)  # same as for imshow: underneath everything
         rasterized = kwargs.pop('rasterized', True)
         alpha = kwargs.pop('alpha', 1)
         if alpha < 1:
@@ -1242,8 +1242,19 @@ class Map():
         # show the vp image
         cmap = kwargs.pop("cmap", "YlOrRd")
         zorder = kwargs.pop("zorder", 0) # same as for imshow: underneath everything
+        kwargs.pop("origin", None)  # remove origin and force ...
+        origin = "lower"
         xlim_, ylim_ = self.ax.get_xlim(), self.ax.get_ylim()
-        artist = self.ax.imshow(vp, extent=(xlim[0], xlim[1], ylim[0], ylim[1]), vmin=vmin, vmax=vmax, cmap=cmap, zorder=zorder, **kwargs)
+        artist = self.ax.imshow(
+            vp,
+            extent=(xlim[0], xlim[1], ylim[0], ylim[1]),
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            zorder=zorder,
+            origin=origin,
+            **kwargs
+        )
         artist.set_clip_path(clip_path)
         # ... because imshow focusses on extent
         self.ax.set_xlim(xlim_)
@@ -1335,9 +1346,11 @@ class Map():
         rbfi = scipy.interpolate.Rbf(xp[inside], yp[inside], vp[inside])
         vp[~inside] = rbfi(xp[~inside], yp[~inside])
 
-        zorder = kwargs.pop("zorder", 0) # same as for imshow: underneath everything
+        zorder = kwargs.pop("zorder", 0)  # same as for imshow: underneath everything
+        kwargs.pop("origin", None)  # remove origin and force ...
+        origin = "lower"
         xlim_, ylim_ = self.ax.get_xlim(), self.ax.get_ylim()
-        artist = self.ax.imshow(vp, extent=(xlim[0], xlim[1], ylim[0], ylim[1]), zorder=zorder, **kwargs)
+        artist = self.ax.imshow(vp, extent=(xlim[0], xlim[1], ylim[0], ylim[1]), zorder=zorder, origin=origin, **kwargs)
         artist.set_clip_path(clip_path)
         # ... because imshow focusses on extent
         self.ax.set_xlim(xlim_)
