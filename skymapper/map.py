@@ -1234,6 +1234,10 @@ class Map():
         vmax = kwargs.pop("vmax", None)
         if vmin is None or vmax is None:
             vlim = np.percentile(vp.data[inside], color_percentiles)
+            # if only a few different values exist, percentiles don't work:
+            # default to min/max
+            if vlim[0] == vlim[1]:
+                vlim = (vp.data[inside].min(), vp.data[inside].max())
             if vmin is None:
                 vmin = vlim[0]
             if vmax is None:
@@ -1276,24 +1280,27 @@ class Map():
         inside = survey.contains(rap, decp)
         return self.vertex(vertices[inside], **kwargs)
 
-    def density(self, lon, lat, nside=1024, **kwargs):
+    def density(self, lon, lat, nside=1024, mask_empty=True, **kwargs):
         """Plot sample density using healpix binning
 
         Args:
             lon: list of longitudes
             lat: list of latitudes
             nside: HealPix nside
+            mask_empty: Whether empty cells should be hidden.
             **kwargs: additional arguments for healpix()
         """
         # get count in healpix cells, restrict to non-empty cells
         bc = healpix.getCountAtLocations(lon, lat, nside=nside)
-        bc = np.ma.array(bc, mask=(bc==0))
+        if mask_empty:
+            bc = np.ma.array(bc, mask=(bc==0))
 
         # styling
+        vmin = kwargs.pop("vmin", 0)  # densities cannot be negative
         cmap = kwargs.pop("cmap", "YlOrRd")
 
         # make map
-        return self.healpix(bc, cmap=cmap, **kwargs)
+        return self.healpix(bc, vmin=vmin, cmap=cmap, **kwargs)
 
     def extrapolate(self, lon, lat, value, resolution=100, **kwargs):
         """Extrapolate lon,lat,value samples on the entire sphere
